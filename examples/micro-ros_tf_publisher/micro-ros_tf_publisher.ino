@@ -9,7 +9,6 @@
 #include <rcl/rcl.h>
 #include <rcl/error_handling.h>
 #include <rclc/rclc.h>
-#include <rclc/executor.h>
 
 #include <geometry_msgs/msg/transform_stamped.h>
 #include <tf2_msgs/msg/tf_message.h>
@@ -19,11 +18,9 @@
 
 rcl_publisher_t publisher;
 tf2_msgs__msg__TFMessage * tf_message;
-rclc_executor_t executor;
 rclc_support_t support;
 rcl_allocator_t allocator;
 rcl_node_t node;
-rcl_timer_t timer;
 
 #define LED_PIN 13
 
@@ -53,12 +50,6 @@ void error_loop(){
     digitalWrite(LED_PIN, !digitalRead(LED_PIN));
     delay(100);
   }
-}
-
-void timer_callback(rcl_timer_t * timer, int64_t last_call_time)
-{
-  RCLC_UNUSED(last_call_time);
-  RCLC_UNUSED(timer);
 }
 
 void setup() {
@@ -93,17 +84,6 @@ void setup() {
     ROSIDL_GET_MSG_TYPE_SUPPORT(tf2_msgs, msg, TFMessage),
     "/tf"));
 
-  // create timer,
-  const unsigned int timer_timeout = 1000;
-  RCCHECK(rclc_timer_init_default(
-    &timer,
-    &support,
-    RCL_MS_TO_NS(timer_timeout),
-    timer_callback));
-
-  // create executor
-  RCCHECK(rclc_executor_init(&executor, &support.context, 1, &allocator));
-
   if(!micro_ros_utilities_create_message_memory(
       ROSIDL_GET_MSG_TYPE_SUPPORT(tf2_msgs, msg, TFMessage),
       &tf_message,
@@ -113,13 +93,13 @@ void setup() {
     error_loop();
   }
 
-  tf_message->transforms.size = 2;
+  tf_message->transforms.size = 1;
 
   tf_message->transforms.data[0].header.frame_id =
     micro_ros_string_utilities_set(tf_message->transforms.data[0].header.frame_id, "/panda_link0");
 
-  tf_message->transforms.data[1].header.frame_id =
-    micro_ros_string_utilities_set(tf_message->transforms.data[1].header.frame_id, "/inertial_unit");
+  tf_message->transforms.data[0].child_frame_id =
+    micro_ros_string_utilities_set(tf_message->transforms.data[0].child_frame_id, "/inertial_unit");
 }
 
 void loop() {
@@ -140,5 +120,5 @@ void loop() {
 
   RCSOFTCHECK(rcl_publish(&publisher, tf_message, NULL));
 
-  //RCCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(100)));
+  // Publishing is performed directly from loop().
 }

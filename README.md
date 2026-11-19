@@ -1,7 +1,7 @@
 ![banner](.images/banner-dark-theme.png#gh-dark-mode-only)
 ![banner](.images/banner-light-theme.png#gh-light-mode-only)
 
-# micro-ROS for Arduino
+# micro-ROS for Arduino (Compatibility only for Humble)
 
 This is a micro-ROS library for baremetal projects based on Arduino IDE or Arduino CLI.
 
@@ -97,6 +97,37 @@ Folders added to `extras/library_generation/extra_packages` and entries added to
 This should be used for example when adding custom messages types or custom micro-ROS packages.
 
 You can [configure many parameters](https://micro.ros.org/docs/tutorials/advanced/microxrcedds_rmw_configuration/) of the library by editing the respective `.meta` file in the `extras/library_generation/` directory.
+
+## Optional unbloated ESP32 Humble profile
+
+This branch provides an opt-in constrained ESP32 build using the Humble dependency set.
+It applies bounded-resource configuration inspired by [OpenCyphal/libudpard](https://github.com/OpenCyphal/libudpard)
+and [OpenCyphal/libcanard](https://github.com/OpenCyphal/libcanard), without importing Cyphal
+protocol code or changing XRCE-DDS/CDR wire compatibility.
+
+The profile disables unused built-in UDP, TCP, serial, and discovery profiles for this custom
+transport build, enables stream framing, sets the custom transport MTU to 256 bytes, limits
+each XRCE stream class to one stream, and reduces the RMW entity/history limits.
+
+Build only this profile from the repository root using the library-builder container:
+
+```bash
+docker pull microros/micro_ros_static_library_builder:humble
+docker run -it --rm -v "$(pwd):/project" \
+  --env MICROROS_LIBRARY_FOLDER=extras \
+  microros/micro_ros_static_library_builder:humble -p esp32_unbloated
+```
+
+The archive is written to `src/esp32/libmicroros.a`, replacing the ESP32 archive in this
+checkout. Build only `esp32_unbloated` when testing this profile; do not combine it with
+`esp32` in the same invocation because both targets write to that path.
+
+**Limitations:** This profile is intended for constrained applications. The 256-byte MTU
+may constrain payload sizes or increase fragmentation overhead. The profile allows one node,
+two publishers, one subscription, no service servers, one client, and one history slot.
+Increase these values if your application needs more entities or larger messages. This profile
+has not yet been built or benchmarked on ESP32 hardware; no RAM, flash, latency, or throughput
+improvement is claimed until measured.
 
 ## Patch Arduino board for support precompiled libraries
 ### Patch Teensyduino

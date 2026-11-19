@@ -216,6 +216,21 @@ if [[ " ${PLATFORMS[@]} " =~ " kakutef7-m7 " ]]; then
     cp -R firmware/build/libmicroros.a /project/src/cortex-m7/fpv5-sp-d16-hardfp/libmicroros.a
 fi
 
+######## Build for ESP32 with bounded-memory Humble profile ########
+# Invoke explicitly with: library_generation.sh -p esp32_unbloated
+if [[ " ${PLATFORMS[@]} " =~ " esp32_unbloated " ]]; then
+    rm -rf firmware/build
+
+    export TOOLCHAIN_PREFIX=/uros_ws/xtensa-esp32-elf/bin/xtensa-esp32-elf-
+    ros2 run micro_ros_setup build_firmware.sh /project/extras/library_generation/esp32_toolchain.cmake /project/extras/library_generation/colcon_esp32_unbloated.meta
+
+    find firmware/build/include/ -name "*.c" -delete
+    cp -R firmware/build/include/* /project/src/
+
+    mkdir -p /project/src/esp32
+    cp -R firmware/build/libmicroros.a /project/src/esp32/libmicroros.a
+fi
+
 ######## Build for ESP32  ########
 if [[ " ${PLATFORMS[@]} " =~ " esp32 " ]]; then
     rm -rf firmware/build

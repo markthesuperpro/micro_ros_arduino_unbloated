@@ -1,0 +1,115 @@
+name: Build Humble ESP32 unbloated Arduino ZIP
+
+on:
+  push:
+    branches:
+      - humble-unbloated
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: esp32-unbloated-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and package ESP32 library
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build with the Humble micro-ROS builder
+        shell: bash
+        env:
+          BUILDER_IMAGE: microros/micro_ros_static_library_builder:humble
+        run: |
+          set -Eeuo pipefail
+
+          docker pull "$BUILDER_IMAGE"
+
+          # Record the exact image digest actually used by this run.
+          BUILDER_IMAGE_DIGEST="$(docker image inspect --format='{{index .RepoDigests 0}}' "$BUILDER_IMAGE")"
+          echo "BUILDER_IMAGE_DIGEST=$BUILDER_IMAGE_DIGEST" >> "$GITHUB_ENV"
+
+          # The builder runs only the opt-in Humble ESP32 profile.
+          docker run --rm             --volume "$GITHUB_WORKSPACE:/project"             --env MICROROS_LIBRARY_FOLDER=extras             "$BUILDER_IMAGE" -p esp32_unbloated
+
+          # Do not package a stale or missing library after a failed build.
+          test -s "$GITHUB_WORKSPACE/src/esp32/libmicroros.a"
+
+      - name: Package and validate Arduino ZIP
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          PACKAGE_ROOT="dist/micro_ros_arduino"
+          ZIP_PATH="dist/micro_ros_arduino_humble_esp32_unbloated.zip"
+
+          rm -rf dist
+          mkdir -p "$PACKAGE_ROOT"
+
+          cp library.properties README.md LICENSE NOTICE \
+            available_ros2_types built_packages "$PACKAGE_ROOT/"
+          cp -a src examples "$PACKAGE_ROOT/"
+
+          cat > "$PACKAGE_ROOT/BUILD_INFO.txt" <<EOF
+          Profile: esp32_unbloated
+          ROS 2 distribution: Humble
+          Target: ESP32
+          Source commit: $GITHUB_SHA
+          Workflow run: $GITHUB_RUN_ID
+          Builder image: $BUILDER_IMAGE_DIGEST
+          Built at (UTC): $(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          EOF
+
+          (cd dist && zip -qr micro_ros_arduino_humble_esp32_unbloated.zip micro_ros_arduino)
+
+          zip -T "$ZIP_PATH"
+          python3 - "$ZIP_PATH" <<'PY'
+          import sys
+          import zipfile
+
+          archive_path = sys.argv[1]
+          required = {
+              "micro_ros_arduino/library.properties",
+              "micro_ros_arduino/src/esp32/libmicroros.a",
+              "micro_ros_arduino/BUILD_INFO.txt",
+          }
+
+          with zipfile.ZipFile(archive_path) as archive:
+              names = set(archive.namelist())
+              missing = required - names
+              if missing:
+                  raise SystemExit(f"ZIP is missing required files: {sorted(missing)}")
+
+              library = archive.getinfo("micro_ros_arduino/src/esp32/libmicroros.a")
+              if library.file_size == 0:
+                  raise SystemExit("The ESP32 static library inside the ZIP is empty")
+
+              unexpected = [name for name in names if not name.startswith("micro_ros_arduino/")]
+              if unexpected:
+                  raise SystemExit(f"Unexpected top-level ZIP entries: {unexpected}")
+
+          print(f"Validated {archive_path}")
+          PY
+
+          sha256sum "$ZIP_PATH" > "$ZIP_PATH.sha256"
+          ls -lh "$ZIP_PATH" "$ZIP_PATH.sha256"
+
+      - name: Upload ZIP and checksum
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: micro_ros_arduino-humble-esp32-unbloated-${{ github.sha }}
+          path: |
+            dist/micro_ros_arduino_humble_esp32_unbloated.zip
+            dist/micro_ros_arduino_humble_esp32_unbloated.zip.sha256
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

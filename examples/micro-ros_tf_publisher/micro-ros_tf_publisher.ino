@@ -98,8 +98,8 @@ void setup() {
   tf_message->transforms.data[0].header.frame_id =
     micro_ros_string_utilities_set(tf_message->transforms.data[0].header.frame_id, "/panda_link0");
 
-  tf_message->transforms.data[1].header.frame_id =
-    micro_ros_string_utilities_set(tf_message->transforms.data[1].header.frame_id, "/inertial_unit");
+  tf_message.transforms.data[0].child_frame_id =
+    micro_ros_string_utilities_set(tf_message.transforms.data[0].child_frame_id, "/inertial_unit");
 }
 
 void loop() {

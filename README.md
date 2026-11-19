@@ -98,6 +98,43 @@ This should be used for example when adding custom messages types or custom micr
 
 You can [configure many parameters](https://micro.ros.org/docs/tutorials/advanced/microxrcedds_rmw_configuration/) of the library by editing the respective `.meta` file in the `extras/library_generation/` directory.
 
+## Optional unbloated ESP32 profile
+
+This fork includes an opt-in ESP32 build profile at
+`extras/library_generation/colcon_esp32_unbloated.meta`. It applies bounded-resource
+configuration inspired by the memory and buffer-management principles used by
+[OpenCyphal/libudpard](https://github.com/OpenCyphal/libudpard) and
+[OpenCyphal/libcanard](https://github.com/OpenCyphal/libcanard), without adding either
+library or changing the XRCE-DDS/CDR wire protocol.
+
+The profile:
+- Keeps the custom transport and stream framing used by the Arduino integration.
+- Disables unused built-in UDP, TCP, serial, and discovery profiles for this custom-transport build.
+- Sets the custom transport MTU to 256 bytes instead of the upstream default of 512.
+- Limits each XRCE input/output stream class to one stream.
+- Uses one node, two publishers, one subscription, no service servers, one client, and one history slot.
+- Keeps the existing reduced tracing, logging, filesystem, thread-support, and type-support settings.
+
+**Build only this profile** from the repository root using the library-builder container:
+
+```bash
+docker pull microros/micro_ros_static_library_builder:kilted
+docker run -it --rm -v "$(pwd):/project" --env MICROROS_LIBRARY_FOLDER=extras microros/micro_ros_static_library_builder:kilted -p esp32_unbloated
+```
+
+The generated archive is written to the normal `src/esp32/libmicroros.a` path, so it replaces
+the ESP32 archive in this checkout. Build only `esp32_unbloated` when testing this profile;
+do not combine it with `esp32` in the same invocation because both targets write that path.
+
+**Compatibility and trade-offs:**
+- This is an opt-in constrained profile, not a drop-in replacement for every ESP32 application.
+- The 256-byte MTU can limit maximum message size and may increase fragmentation or XRCE overhead. Increase it if your message payloads require it.
+- The profile intentionally disables service servers and limits entities. Applications needing services, multiple subscriptions, more publishers, or more history must edit the corresponding RMW limits.
+- The profile does not import Cyphal/CAN or Cyphal/UDP and does not claim zero-copy XRCE transport. Those protocols are not wire-compatible with ROS 2 XRCE-DDS.
+- No firmware-size, RAM, latency, or throughput improvement is claimed until the generated archive is built and measured on the target ESP32 board.
+
+The profile is based on LibUDPard's fixed-pool, bounded-memory, and scatter/gather design principles and Libcanard's separate memory-resource and lazy-allocation principles. It reuses micro-ROS's existing configuration mechanisms rather than adding new runtime dependencies.
+
 ## Patch Arduino board for support precompiled libraries
 ### Patch Teensyduino
 

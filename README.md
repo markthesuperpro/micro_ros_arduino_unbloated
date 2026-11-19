@@ -1,7 +1,7 @@
 ![banner](.images/banner-dark-theme.png#gh-dark-mode-only)
 ![banner](.images/banner-light-theme.png#gh-light-mode-only)
 
-# micro-ROS for Arduino
+# micro-ROS for Arduino (Compatibility only for Humble)
 
 This is a micro-ROS library for baremetal projects based on Arduino IDE or Arduino CLI.
 
